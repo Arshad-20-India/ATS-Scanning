@@ -1,0 +1,4 @@
+# For scripts/load_test.py and scripts/benchmark_server.py.
+# The backend's own requirements.txt (../backend/requirements.txt)
+# must also be installed -- these scripts import the real app code.
+requests==2.32.3
