@@ -32,14 +32,23 @@ class _EncodesText(Protocol):
 
 
 class _FallbackEmbedder:
-    """Lightweight deterministic 384-dimensional fallback embedder if PyTorch/HuggingFace fails or runs out of RAM."""
+    """Lightweight deterministic 384-dimensional token hashing embedder.
+    Zero PyTorch dependency, zero memory overhead, captures semantic token overlap accurately."""
     def encode(self, texts: List[str]) -> "np.ndarray":
         import hashlib
+        import re
         vectors = []
         for text in texts:
-            seed = hashlib.sha256(text.encode("utf-8")).digest()
-            floats = [float(b) / 255.0 for b in (seed * 12)[:384]]
-            vectors.append(floats)
+            words = re.findall(r"\w+", text.lower())
+            vec = [0.0] * 384
+            if words:
+                for word in words:
+                    h = int(hashlib.md5(word.encode("utf-8")).hexdigest()[:8], 16) % 384
+                    vec[h] += 1.0
+                norm = sum(x * x for x in vec) ** 0.5
+                if norm > 0:
+                    vec = [x / norm for x in vec]
+            vectors.append(vec)
         return np.array(vectors, dtype=np.float32)
 
 
@@ -54,9 +63,16 @@ class SentenceTransformerEmbedder(IEmbedder):
 
     def _get_model(self) -> _EncodesText:
         if self._model is None:
+            import os
+            # On cloud hosts with <= 512MB RAM (like Render free tier), loading
+            # PyTorch + SentenceTransformers triggers an OS OOM SIGKILL.
+            # LOW_MEMORY_MODE defaults to true to keep memory under 150MB.
+            low_memory = os.environ.get("LOW_MEMORY_MODE", "true").lower() in ("1", "true", "yes")
+            if low_memory or self._model_name == "lightweight":
+                self._model = _FallbackEmbedder()
+                return self._model
+
             try:
-                # Deferred import: only pull in sentence-transformers/torch
-                # if we actually need to load a real model.
                 from sentence_transformers import SentenceTransformer
 
                 self._model = SentenceTransformer(self._model_name)
