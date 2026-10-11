@@ -88,9 +88,16 @@ def create_app(container: Optional[ApplicationContainer] = None) -> FastAPI:
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
 
+    cors_origins = settings.cors_origins_list()
+    origin_regex = None
+    if "*" in cors_origins:
+        cors_origins = []
+        origin_regex = r"https?://.*"
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins_list(),
+        allow_origins=cors_origins,
+        allow_origin_regex=origin_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
