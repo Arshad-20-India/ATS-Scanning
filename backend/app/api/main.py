@@ -88,22 +88,27 @@ def create_app(container: Optional[ApplicationContainer] = None) -> FastAPI:
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
 
-    cors_origins = settings.cors_origins_list()
-    origin_regex = None
-    if "*" in cors_origins:
-        cors_origins = []
-        origin_regex = r"https?://.*"
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(RequestLoggingMiddleware)
+
+    cors_origins = [o for o in settings.cors_origins_list() if o != "*"]
+    for default_origin in [
+        "https://ats-scanning.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:8000",
+    ]:
+        if default_origin not in cors_origins:
+            cors_origins.append(default_origin)
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_origin_regex=origin_regex,
+        allow_origin_regex=r"^https?://.*",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["*"],
     )
-    app.add_middleware(SecurityHeadersMiddleware)
-    app.add_middleware(RequestLoggingMiddleware)
 
     register_exception_handlers(app)
     instrument_app(app)  # exposes /metrics
