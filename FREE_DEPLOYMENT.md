@@ -56,11 +56,11 @@ This guide walks you through deploying your full-stack AI Resume Intelligence ap
    - **Runtime**: `Python 3`
    - **Build Command**:
      ```bash
-     pip install -r requirements.txt && python -m spacy download en_core_web_sm
+     pip install -r requirements.txt && pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
      ```
    - **Start Command**:
      ```bash
-     uvicorn app.main:app --host 0.0.0.0 --port $PORT
+     alembic upgrade head && uvicorn app.api.main:app --host 0.0.0.0 --port $PORT
      ```
 5. Add **Environment Variables**:
    - `DATABASE_URL`: *(Your Supabase PostgreSQL URI from Step 2)*
