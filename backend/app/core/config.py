@@ -33,6 +33,32 @@ def _env_bool(key: str, default: bool) -> bool:
     return value.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _clean_redis_url(url: str) -> str:
+    if not url:
+        return url
+    url = url.strip().strip("'\"")
+    # If the user copied the full redis-cli command from Upstash
+    if "redis-cli" in url or "-u" in url:
+        has_tls = "--tls" in url
+        for part in url.split():
+            if part.startswith("redis://") or part.startswith("rediss://"):
+                url = part
+                break
+        if has_tls and url.startswith("redis://"):
+            url = "rediss://" + url[len("redis://"):]
+    elif "upstash.io" in url and url.startswith("redis://"):
+        # Upstash always uses TLS
+        url = "rediss://" + url[len("redis://"):]
+    return url
+
+
+def _env_redis_url(key: str, default: str) -> str:
+    raw = os.environ.get(key)
+    if raw is None:
+        return default
+    return _clean_redis_url(raw)
+
+
 @dataclass(frozen=True)
 class Settings:
     # NLP / embeddings
@@ -53,7 +79,7 @@ class Settings:
         "DATABASE_URL",
         "postgresql+psycopg2://resume_scanner:resume_scanner_dev@localhost:5432/resume_scanner_dev",
     )
-    redis_url: str = _env_str("REDIS_URL", "redis://localhost:6379/0")
+    redis_url: str = _env_redis_url("REDIS_URL", "redis://localhost:6379/0")
     embedding_cache_ttl_seconds: int = int(
         _env_str("EMBEDDING_CACHE_TTL_SECONDS", str(60 * 60 * 24 * 7))
     )
@@ -68,8 +94,8 @@ class Settings:
     )
 
     # Celery (Phase 6)
-    celery_broker_url: str = _env_str("CELERY_BROKER_URL", "redis://localhost:6379/2")
-    celery_result_backend: str = _env_str(
+    celery_broker_url: str = _env_redis_url("CELERY_BROKER_URL", "redis://localhost:6379/2")
+    celery_result_backend: str = _env_redis_url(
         "CELERY_RESULT_BACKEND", "redis://localhost:6379/2"
     )
 
