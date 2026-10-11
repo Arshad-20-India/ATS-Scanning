@@ -37,10 +37,20 @@ async function request<T>(
     if (token) finalHeaders.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...rest,
-    headers: finalHeaders,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...rest,
+      headers: finalHeaders,
+    });
+  } catch (err: any) {
+    console.error(`[API] Failed to fetch from ${API_BASE_URL}${path}:`, err);
+    throw new ApiError(
+      0,
+      "network_error",
+      `Unable to reach backend API at ${API_BASE_URL}. If using Render free tier, please open ${API_BASE_URL}/health to wake up the server (takes ~45s), then retry.`
+    );
+  }
 
   if (response.status === 401 && auth) {
     // Token expired/invalid -- clear it so the UI can prompt re-login

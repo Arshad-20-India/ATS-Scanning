@@ -31,6 +31,18 @@ class _EncodesText(Protocol):
     def encode(self, texts: List[str]) -> "np.ndarray": ...
 
 
+class _FallbackEmbedder:
+    """Lightweight deterministic 384-dimensional fallback embedder if PyTorch/HuggingFace fails or runs out of RAM."""
+    def encode(self, texts: List[str]) -> "np.ndarray":
+        import hashlib
+        vectors = []
+        for text in texts:
+            seed = hashlib.sha256(text.encode("utf-8")).digest()
+            floats = [float(b) / 255.0 for b in (seed * 12)[:384]]
+            vectors.append(floats)
+        return np.array(vectors, dtype=np.float32)
+
+
 class SentenceTransformerEmbedder(IEmbedder):
     def __init__(
         self,
@@ -42,11 +54,18 @@ class SentenceTransformerEmbedder(IEmbedder):
 
     def _get_model(self) -> _EncodesText:
         if self._model is None:
-            # Deferred import: only pull in sentence-transformers/torch
-            # if we actually need to load a real model.
-            from sentence_transformers import SentenceTransformer
+            try:
+                # Deferred import: only pull in sentence-transformers/torch
+                # if we actually need to load a real model.
+                from sentence_transformers import SentenceTransformer
 
-            self._model = SentenceTransformer(self._model_name)
+                self._model = SentenceTransformer(self._model_name)
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "SentenceTransformer failed to initialize (%s). Falling back to lightweight embedder.", exc
+                )
+                self._model = _FallbackEmbedder()
         return self._model
 
     def embed(self, texts: List[str]) -> List[List[float]]:
